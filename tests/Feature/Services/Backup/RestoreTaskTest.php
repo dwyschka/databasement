@@ -279,6 +279,41 @@ test('execute throws when database types are incompatible', function () {
         ->toThrow(\App\Exceptions\Backup\RestoreException::class, 'Cannot restore mysql snapshot to postgres server');
 });
 
+test('execute throws when restoring a MySQL snapshot to a MariaDB server', function () {
+    $restoreTask = new RestoreTask(
+        new DatabaseProvider,
+        $this->shellProcessor,
+        $this->filesystemProvider,
+        $this->compressorFactory,
+        $this->sshTunnelService,
+        new PostScriptRunner,
+    );
+
+    $config = new RestoreConfig(
+        targetServer: new DatabaseConnectionConfig(
+            databaseType: DatabaseType::MARIADB,
+            serverName: 'Target MariaDB',
+            host: 'localhost',
+            port: 3306,
+            username: 'root',
+            password: 'secret',
+        ),
+        snapshotVolume: buildSnapshotVolumeConfig(),
+        snapshotFilename: 'backup.sql.gz',
+        snapshotFileSize: 1024,
+        snapshotCompressionType: CompressionType::GZIP,
+        snapshotDatabaseType: DatabaseType::MYSQL,
+        snapshotDatabaseName: 'sourcedb',
+        schemaName: 'restored_db',
+        workingDirectory: $this->tempDir.'/compat-test-'.uniqid(),
+    );
+
+    mkdir($config->workingDirectory, 0755, true);
+
+    expect(fn () => $restoreTask->execute($config, new InMemoryBackupLogger))
+        ->toThrow(\App\Exceptions\Backup\RestoreException::class, 'Cannot restore mysql snapshot to mariadb server');
+});
+
 test('execute throws for Redis restore', function () {
     $restoreTask = new RestoreTask(
         new DatabaseProvider,

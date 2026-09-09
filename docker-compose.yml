@@ -58,6 +58,22 @@ services:
       timeout: 5s
       retries: 5
 
+  mariadb:
+    image: mariadb:11
+    container_name: databasement-mariadb
+    environment:
+      MARIADB_ROOT_PASSWORD: root
+      MARIADB_DATABASE: databasement
+    ports:
+      - "127.0.0.1:3308:3306"
+    volumes:
+      - mariadb-data:/var/lib/mysql
+    healthcheck:
+      test: [ "CMD", "mariadb-admin", "ping", "-h", "localhost", "-u", "root", "-proot" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   postgres:
     image: postgres:17
     container_name: databasement-postgres
@@ -240,6 +256,7 @@ volumes:
   app-data:
   pest-cache:
   mysql-data:
+  mariadb-data:
   postgres-data:
   rustfs-data:
   sftp-data:

@@ -172,7 +172,7 @@ class DatabaseServer extends Model
      */
     public function supportsAdminer(): bool
     {
-        return in_array($this->database_type, [DatabaseType::MYSQL, DatabaseType::POSTGRESQL, DatabaseType::SQLITE])
+        return in_array($this->database_type, [DatabaseType::MYSQL, DatabaseType::MARIADB, DatabaseType::POSTGRESQL, DatabaseType::SQLITE])
             && $this->ssh_config_id === null
             && $this->agent_id === null;
     }
@@ -319,7 +319,7 @@ class DatabaseServer extends Model
      */
     public function isAppDatabase(string $schemaName): bool
     {
-        $appDatabaseTypes = [DatabaseType::MYSQL, DatabaseType::POSTGRESQL];
+        $appDatabaseTypes = [DatabaseType::MYSQL, DatabaseType::MARIADB, DatabaseType::POSTGRESQL];
 
         if (! in_array($this->database_type, $appDatabaseTypes)) {
             return false;
@@ -330,7 +330,7 @@ class DatabaseServer extends Model
 
         $driverToType = [
             'mysql' => DatabaseType::MYSQL,
-            'mariadb' => DatabaseType::MYSQL,
+            'mariadb' => DatabaseType::MARIADB,
             'pgsql' => DatabaseType::POSTGRESQL,
         ];
 
@@ -374,7 +374,7 @@ class DatabaseServer extends Model
             ['dump_flags',          fn ($v) => $type !== DatabaseType::SQLITE->value && $v !== '' && $v !== null,  fn ($v) => $v],
             ['dump_format',         fn ($v) => $type === DatabaseType::POSTGRESQL->value && $v === 'custom',       fn () => 'custom'],
             ['dump_privileges',     fn ($v) => $type === DatabaseType::POSTGRESQL->value && $v,                    fn () => true],
-            ['ssl_enabled',         fn ($v) => in_array($type, [DatabaseType::MYSQL->value, DatabaseType::POSTGRESQL->value], true) && $v, fn () => true],
+            ['ssl_enabled',         fn ($v) => in_array($type, [DatabaseType::MYSQL->value, DatabaseType::MARIADB->value, DatabaseType::POSTGRESQL->value], true) && $v, fn () => true],
             ['connection_database', fn ($v) => $type === DatabaseType::POSTGRESQL->value && is_string($v) && trim($v) !== '', fn ($v) => trim($v)],
         ];
 

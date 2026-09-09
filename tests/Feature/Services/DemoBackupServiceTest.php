@@ -49,6 +49,30 @@ test('creates demo backup for mysql database', function () {
         ->and($databaseServer->backups->first())->not->toBeNull();
 });
 
+test('creates demo backup for mariadb database', function () {
+    // Set up a fake mariadb connection config - no actual connection is made
+    config(['database.connections.mariadb' => [
+        'driver' => 'mariadb',
+        'host' => 'mariadb.example.com',
+        'port' => 3306,
+        'database' => 'myapp',
+        'username' => 'dbuser',
+        'password' => 'secret',
+    ]]);
+
+    $service = app(DemoBackupService::class);
+    $databaseServer = $service->createDemoBackup('mariadb');
+
+    expect($databaseServer)->toBeInstanceOf(DatabaseServer::class)
+        ->and($databaseServer->database_type)->toBe(DatabaseType::MARIADB)
+        ->and($databaseServer->host)->toBe('mariadb.example.com')
+        ->and($databaseServer->port)->toBe(3306)
+        ->and($databaseServer->username)->toBe('dbuser')
+        ->and(Volume::count())->toBe(1)
+        ->and(Backup::count())->toBe(1)
+        ->and($databaseServer->backups->first())->not->toBeNull();
+});
+
 test('creates demo backup for postgresql database', function () {
     // Set up a fake pgsql connection config - no actual connection is made
     config(['database.connections.pgsql' => [

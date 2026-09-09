@@ -5,28 +5,23 @@ namespace App\Services\Backup\Databases;
 use App\Contracts\BackupLogger;
 use App\Enums\DatabaseType;
 use App\Exceptions\Backup\ConnectionException;
+use App\Services\Backup\DTO\DatabaseOperationLog;
 use App\Services\Backup\DTO\DatabaseOperationResult;
 use App\Support\Formatters;
 use Illuminate\Process\Exceptions\ProcessTimedOutException;
 use Illuminate\Support\Facades\Process;
 
-/**
- * Handler for genuine MySQL servers, using the official `mysql`/`mysqldump`
- * client shipped in the runtime image (not MariaDB's client — see
- * {@see MariadbDatabase} for that). Kept as a separate class from
- * MariadbDatabase because the two clients' CLI flags have diverged (most
- * visibly the SSL flag: `--ssl-mode` here vs `--ssl`/`--skip_ssl` there), and
- * the MariaDB client's routines-dumping quirk against modern MySQL server
- * version strings doesn't apply when the matching client is used.
- */
-class MysqlDatabase implements DatabaseInterface
+class MariadbDatabase implements DatabaseInterface
 {
     /** @var array<string, mixed> */
     private array $config;
 
-    private const string DUMP_BINARY = 'mysqldump';
+    /** Cached VERSION() result; '' means "asked and could not tell". */
+    private ?string $serverVersion = null;
 
-    private const string CLIENT_BINARY = 'mysql';
+    private const string DUMP_BINARY = 'mariadb-dump';
+
+    private const string CLIENT_BINARY = 'mariadb';
 
     private const array DUMP_OPTIONS = [
         '--single-transaction', // Consistent snapshot for InnoDB without locking
@@ -35,6 +30,9 @@ class MysqlDatabase implements DatabaseInterface
         '--hex-blob',           // Encode binary data as hex for safer transport
         '--quote-names',        // Quote identifiers with backticks
     ];
+
+    /** Server version from which the MariaDB client dumps stored packages. */
+    private const string MARIADB_PACKAGES_VERSION = '10.3.0';
 
     private const array EXCLUDED_DATABASES = [
         'information_schema',
@@ -46,15 +44,17 @@ class MysqlDatabase implements DatabaseInterface
     /**
      * Resolve the SSL-related CLI flag.
      *
-     * The MySQL client deprecated the boolean `--ssl`/`--skip_ssl` pair in
-     * favour of `--ssl-mode`. `REQUIRED` demands an encrypted connection
-     * without verifying the server certificate; `DISABLED` forces plaintext.
+     * - ssl_enabled = true  → '--ssl --ssl-verify-server-cert=0' (encrypted, no cert verification).
+     *                          `--ssl-verify-server-cert=0` alone already triggers TLS, but the
+     *                          explicit `--ssl` makes the intent clear in the dump-command preview.
+     * - ssl_enabled = false → '--skip_ssl' (plaintext — mariadb client defaults to TLS,
+     *                                       which fails against MySQL's self-signed certs)
      */
     private function getSslFlag(): string
     {
         return ! empty($this->config['ssl_enabled'])
-            ? '--ssl-mode=REQUIRED'
-            : '--ssl-mode=DISABLED';
+            ? '--ssl --ssl-verify-server-cert=0'
+            : '--skip_ssl';
     }
 
     /**
@@ -70,12 +70,21 @@ class MysqlDatabase implements DatabaseInterface
         $options = self::DUMP_OPTIONS;
         $options[] = $this->getSslFlag();
 
-        $extraFlags = '';
-        if (! empty($this->config['dump_flags'])) {
-            $extraFlags = ' '.DatabaseOperationResult::escapeFlags($this->config['dump_flags'], DatabaseType::MYSQL);
+        $log = null;
+        if (! $this->canDumpRoutines()) {
+            $options = array_values(array_diff($options, ['--routines']));
+            $log = new DatabaseOperationLog(
+                'Stored routines were excluded from this dump: the MariaDB client cannot dump routines from a MySQL server reporting version '.$this->serverVersion().'.',
+                'warning',
+            );
         }
 
-        // Flags must come before the database name; mysqldump treats anything after it as table names
+        $extraFlags = '';
+        if (! empty($this->config['dump_flags'])) {
+            $extraFlags = ' '.DatabaseOperationResult::escapeFlags($this->config['dump_flags'], DatabaseType::MARIADB);
+        }
+
+        // Flags must come before the database name; mariadb-dump treats anything after it as table names
         $command = sprintf(
             '%s %s --host=%s --port=%s --user=%s --password=%s%s %s',
             self::DUMP_BINARY,
@@ -90,7 +99,50 @@ class MysqlDatabase implements DatabaseInterface
 
         $command .= ' > '.escapeshellarg($outputPath);
 
-        return new DatabaseOperationResult(command: $command);
+        return new DatabaseOperationResult(command: $command, log: $log);
+    }
+
+    /**
+     * The client gates stored packages on the numeric server version alone, so a
+     * MySQL server on the YY.M scheme (9.7 → 26.7) gets a MariaDB-only
+     * `SHOW PACKAGE STATUS` and the dump dies. No flag skips just the packages.
+     * Unknown versions keep `--routines`, preserving the previous behaviour.
+     */
+    private function canDumpRoutines(): bool
+    {
+        $version = $this->serverVersion();
+
+        if ($version === null || str_contains(strtolower($version), 'mariadb')) {
+            return true;
+        }
+
+        return version_compare($version, self::MARIADB_PACKAGES_VERSION, '<');
+    }
+
+    /**
+     * Server version as reported by the server, or null when it cannot be read.
+     */
+    protected function serverVersion(): ?string
+    {
+        // Unset for configs that never reach a server, such as the UI preview.
+        if (empty($this->config['probe_server_version'])) {
+            return null;
+        }
+
+        if ($this->serverVersion !== null) {
+            return $this->serverVersion === '' ? null : $this->serverVersion;
+        }
+
+        try {
+            $statement = $this->createPdo()->query('SELECT VERSION()');
+            $version = $statement === false ? false : $statement->fetchColumn();
+        } catch (\PDOException) {
+            $version = false;
+        }
+
+        $this->serverVersion = is_string($version) ? $version : '';
+
+        return $this->serverVersion === '' ? null : $this->serverVersion;
     }
 
     public function restore(string $inputPath): DatabaseOperationResult

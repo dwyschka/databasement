@@ -20,7 +20,7 @@ abstract class ConnectionRules
     public static function for(?DatabaseType $type): self
     {
         return match ($type) {
-            DatabaseType::MYSQL => new MysqlConnectionRules,
+            DatabaseType::MYSQL, DatabaseType::MARIADB => new MysqlConnectionRules,
             DatabaseType::POSTGRESQL => new PostgresConnectionRules,
             DatabaseType::SQLITE => new SqliteConnectionRules,
             DatabaseType::REDIS => new RedisConnectionRules,

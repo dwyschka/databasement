@@ -26,7 +26,8 @@ class DemoBackupService
         $dbConfig = config("database.connections.{$connection}");
 
         $databaseType = match ($connection) {
-            'mysql', 'mariadb' => 'mysql',
+            'mysql' => 'mysql',
+            'mariadb' => 'mariadb',
             'pgsql' => 'postgres',
             'sqlite' => 'sqlite',
             default => throw new RuntimeException("Unsupported database connection: {$connection}"),

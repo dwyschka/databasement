@@ -6,6 +6,7 @@ use App\Models\DatabaseServerSshConfig;
 use App\Services\Backup\Databases\DatabaseInterface;
 use App\Services\Backup\Databases\DatabaseProvider;
 use App\Services\Backup\Databases\FirebirdDatabase;
+use App\Services\Backup\Databases\MariadbDatabase;
 use App\Services\Backup\Databases\MongodbDatabase;
 use App\Services\Backup\Databases\MysqlDatabase;
 use App\Services\Backup\Databases\PostgresqlDatabase;
@@ -20,6 +21,7 @@ test('make returns correct handler for database type', function (DatabaseType $t
     expect($factory->make($type))->toBeInstanceOf($expectedClass);
 })->with([
     'mysql' => [DatabaseType::MYSQL, MysqlDatabase::class],
+    'mariadb' => [DatabaseType::MARIADB, MariadbDatabase::class],
     'postgresql' => [DatabaseType::POSTGRESQL, PostgresqlDatabase::class],
     'sqlite' => [DatabaseType::SQLITE, SqliteDatabase::class],
     'redis' => [DatabaseType::REDIS, RedisDatabase::class],
@@ -119,6 +121,23 @@ test('makeForServer passes ssl_enabled from extra_config for mysql', function ()
     $database = (new DatabaseProvider)->makeForServer($server, 'myapp', 'db.example.com', 3306);
 
     expect($database->dump('/tmp/test.sql')->command)
+        ->toContain('--ssl-mode=REQUIRED')
+        ->not->toContain('--ssl-mode=DISABLED');
+});
+
+test('makeForServer passes ssl_enabled from extra_config for mariadb', function () {
+    $server = DatabaseServer::factory()->create([
+        'database_type' => 'mariadb',
+        'host' => 'db.example.com',
+        'port' => 3306,
+        'username' => 'root',
+        'password' => 'secret',
+        'extra_config' => ['ssl_enabled' => true],
+    ]);
+
+    $database = (new DatabaseProvider)->makeForServer($server, 'myapp', 'db.example.com', 3306);
+
+    expect($database->dump('/tmp/test.sql')->command)
         ->toContain('--ssl --ssl-verify-server-cert=0')
         ->not->toContain('--skip_ssl');
 });
@@ -137,8 +156,8 @@ test('makeFromConfig passes ssl_enabled from extra_config for mysql', function (
     $database = (new DatabaseProvider)->makeFromConfig($config, 'myapp', 'db.example.com', 3306);
 
     expect($database->dump('/tmp/test.sql')->command)
-        ->toContain('--ssl --ssl-verify-server-cert=0')
-        ->not->toContain('--skip_ssl');
+        ->toContain('--ssl-mode=REQUIRED')
+        ->not->toContain('--ssl-mode=DISABLED');
 });
 
 test('makeFromConfig passes ssl_enabled from extra_config for postgres', function () {
@@ -244,6 +263,7 @@ test('testConnectionForServer delegates to handler testConnection', function (st
     expect($result['success'])->toBeTrue();
 })->with([
     'mysql uses empty database name' => ['mysql', ''],
+    'mariadb uses empty database name' => ['mariadb', ''],
     'postgresql uses postgres database' => ['postgres', 'postgres'],
     'redis uses empty database name' => ['redis', ''],
     'mongodb uses empty database name' => ['mongodb', ''],

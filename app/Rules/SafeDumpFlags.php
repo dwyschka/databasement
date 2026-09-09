@@ -29,6 +29,21 @@ readonly class SafeDumpFlags implements ValidationRule
     public const string PATTERN = '/\A[a-zA-Z0-9\s\-\_\=\.\/\,\:\*\?\%\+\@]+\z/';
 
     /**
+     * mysqldump / mariadb-dump — the two clients' options overlap closely
+     * enough (both descend from the same original tool) that one deny list
+     * applies to both; a name denied here but absent from one client's own
+     * option table is simply never offered by that client.
+     */
+    private const array MYSQL_FAMILY_DENIED = [
+        '--result-file', '-r',   // the dump itself
+        '--tab', '-T',           // one .sql file per table, into a directory
+        '--dir', '-D',           // directory-format backup (MariaDB 11+)
+        '--log-error',           // warnings and errors
+        '--defaults-file', '--defaults-extra-file', // options, --result-file among them
+        '--plugin-dir',          // client-side plugins, loaded as code
+    ];
+
+    /**
      * Options that let the caller choose a path the dump client writes, or one
      * it loads further options or code from. Short forms are listed alongside
      * the long ones they abbreviate. Every spelling here was checked against
@@ -37,15 +52,8 @@ readonly class SafeDumpFlags implements ValidationRule
      * @var array<string, list<string>>
      */
     private const DENIED = [
-        // mariadb-dump
-        DatabaseType::MYSQL->value => [
-            '--result-file', '-r',   // the dump itself
-            '--tab', '-T',           // one .sql file per table, into a directory
-            '--dir', '-D',           // directory-format backup (MariaDB 11+)
-            '--log-error',           // warnings and errors
-            '--defaults-file', '--defaults-extra-file', // options, --result-file among them
-            '--plugin-dir',          // client-side plugins, loaded as code
-        ],
+        DatabaseType::MYSQL->value => self::MYSQL_FAMILY_DENIED,
+        DatabaseType::MARIADB->value => self::MYSQL_FAMILY_DENIED,
         // pg_dump
         DatabaseType::POSTGRESQL->value => [
             '--file', '-f',          // output file or directory
@@ -136,11 +144,11 @@ readonly class SafeDumpFlags implements ValidationRule
      * client's full option table, so a value whose text happens to contain a
      * denied letter is refused as well.
      *
-     * The MySQL clients read `_` and `-` as the same character in a long name,
-     * so `--result_file` reaches the same code as `--result-file` (the dump
-     * command relies on this itself, passing `--skip_ssl`). No other client
-     * here does: pg_dump, mongodump and redis-cli all refuse the underscored
-     * spelling outright.
+     * The MySQL and MariaDB clients read `_` and `-` as the same character in a
+     * long name, so `--result_file` reaches the same code as `--result-file`
+     * (the mariadb-dump command relies on this itself, passing `--skip_ssl`).
+     * No other client here does: pg_dump, mongodump and redis-cli all refuse
+     * the underscored spelling outright.
      *
      * @return list<string>
      */
@@ -153,7 +161,7 @@ readonly class SafeDumpFlags implements ValidationRule
         if (str_starts_with($token, '--')) {
             $name = strtolower(strstr($token, '=', true) ?: $token);
 
-            return [$type === DatabaseType::MYSQL ? str_replace('_', '-', $name) : $name];
+            return [in_array($type, [DatabaseType::MYSQL, DatabaseType::MARIADB], true) ? str_replace('_', '-', $name) : $name];
         }
 
         if (! str_starts_with($token, '-')) {

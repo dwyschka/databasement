@@ -9,6 +9,7 @@ use Illuminate\Contracts\Validation\ValidationRule;
 enum DatabaseType: string
 {
     case MYSQL = 'mysql';
+    case MARIADB = 'mariadb';
     case POSTGRESQL = 'postgres';
     case SQLITE = 'sqlite';
     case REDIS = 'redis';
@@ -19,7 +20,8 @@ enum DatabaseType: string
     public function label(): string
     {
         return match ($this) {
-            self::MYSQL => 'MySQL / MariaDB',
+            self::MYSQL => 'MySQL',
+            self::MARIADB => 'MariaDB',
             self::POSTGRESQL => 'PostgreSQL',
             self::SQLITE => 'SQLite',
             self::REDIS => 'Redis / Valkey',
@@ -33,6 +35,7 @@ enum DatabaseType: string
     {
         return match ($this) {
             self::MYSQL => 'devicon.mysql',
+            self::MARIADB => 'devicon.mariadb',
             self::POSTGRESQL => 'devicon.postgresql',
             self::SQLITE => 'devicon.sqlite',
             self::REDIS => 'devicon.redis',
@@ -64,6 +67,7 @@ enum DatabaseType: string
     {
         return match ($this) {
             self::MYSQL => 3306,
+            self::MARIADB => 3306,
             self::POSTGRESQL => 5432,
             self::SQLITE => 0,
             self::REDIS => 6379,
@@ -82,14 +86,14 @@ enum DatabaseType: string
      */
     private function buildDsn(string $host, int $port, ?string $database = null): string
     {
-        // MySQL PDO treats 'localhost' as a Unix socket connection.
+        // MySQL/MariaDB PDO treats 'localhost' as a Unix socket connection.
         // Force TCP by using 127.0.0.1 instead.
-        if ($this === self::MYSQL && $host === 'localhost') {
+        if (in_array($this, [self::MYSQL, self::MARIADB], true) && $host === 'localhost') {
             $host = '127.0.0.1';
         }
 
         return match ($this) {
-            self::MYSQL => $database
+            self::MYSQL, self::MARIADB => $database
                 ? sprintf('mysql:host=%s;port=%d;dbname=%s', $host, $port, $database)
                 : sprintf('mysql:host=%s;port=%d', $host, $port),
             self::POSTGRESQL => sprintf(
