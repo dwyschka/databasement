@@ -107,6 +107,17 @@ class DatabaseSeeder extends Seeder
             'organization_id' => $defaultOrg->id,
         ]);
 
+        // MariaDB server (from docker-compose)
+        $mariadb = DatabaseServer::create([
+            'name' => 'Local MariaDB',
+            'host' => 'mariadb',
+            'port' => 3306,
+            'database_type' => 'mariadb',
+            'username' => 'root',
+            'password' => 'root',
+            'organization_id' => $defaultOrg->id,
+        ]);
+
         // PostgreSQL server (from docker-compose)
         $postgres = DatabaseServer::create([
             'name' => 'Local PostgreSQL',
@@ -186,7 +197,7 @@ class DatabaseSeeder extends Seeder
             'database_selection_mode' => 'all',
         ];
 
-        foreach ([$mysql, $redis, $mongodb, $mssql] as $server) {
+        foreach ([$mysql, $mariadb, $redis, $mongodb, $mssql] as $server) {
             Backup::create(array_merge($backupDefaults, [
                 'database_server_id' => $server->id,
             ]))->volumes()->attach($volume);

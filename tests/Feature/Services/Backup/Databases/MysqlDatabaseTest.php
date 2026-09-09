@@ -15,14 +15,14 @@ beforeEach(function () {
     ]);
 });
 
-test('dump builds correct command with skip_ssl by default', function () {
+test('dump builds correct command with ssl-mode=DISABLED by default', function () {
     $result = $this->db->dump('/tmp/dump.sql');
 
     expect($result)->toBeInstanceOf(DatabaseOperationResult::class)
-        ->and($result->command)->toBe("mariadb-dump --single-transaction --routines --add-drop-table --hex-blob --quote-names --skip_ssl --host='db.local' --port='3306' --user='root' --password='secret' 'myapp' > '/tmp/dump.sql'");
+        ->and($result->command)->toBe("mysqldump --single-transaction --routines --add-drop-table --hex-blob --quote-names --ssl-mode=DISABLED --host='db.local' --port='3306' --user='root' --password='secret' 'myapp' > '/tmp/dump.sql'");
 });
 
-test('dump uses ssl-verify-server-cert=0 when ssl_enabled is true', function () {
+test('dump uses ssl-mode=REQUIRED when ssl_enabled is true', function () {
     $db = new MysqlDatabase;
     $db->setConfig([
         'host' => 'db.local',
@@ -36,8 +36,18 @@ test('dump uses ssl-verify-server-cert=0 when ssl_enabled is true', function () 
     $result = $db->dump('/tmp/dump.sql');
 
     expect($result->command)
-        ->toContain('--ssl --ssl-verify-server-cert=0')
-        ->not->toContain('--skip_ssl');
+        ->toContain('--ssl-mode=REQUIRED')
+        ->not->toContain('--ssl-mode=DISABLED');
+});
+
+test('dump always keeps --routines, unlike the MariaDB client', function () {
+    // The MariaDB client's routines quirk (App\Services\Backup\Databases\MariadbDatabase)
+    // does not apply here: mysqldump talking to a real MySQL server has no
+    // version-gated SHOW PACKAGE STATUS problem.
+    $result = $this->db->dump('/tmp/dump.sql');
+
+    expect($result->command)->toContain('--routines')
+        ->and($result->log)->toBeNull();
 });
 
 test('dump includes extra dump flags', function () {
@@ -53,77 +63,19 @@ test('dump includes extra dump flags', function () {
 
     $result = $db->dump('/tmp/dump.sql');
 
-    // Flags must appear before the database name (mariadb-dump treats post-db args as table names)
+    // Flags must appear before the database name (mysqldump treats post-db args as table names)
     expect($result->command)->toContain("'--no-tablespaces' '--column-statistics=0' 'myapp'")
         ->and($result->command)->toEndWith("> '/tmp/dump.sql'");
 });
 
-/** A handler on a live server reporting $version, or an unreadable one for null. */
-function mysqlDatabaseReportingVersion(?string $version): MysqlDatabase
-{
-    $pdo = Mockery::mock(PDO::class);
-
-    if ($version === null) {
-        $pdo->shouldReceive('query')->andThrow(new PDOException('server has gone away'));
-    } else {
-        $statement = Mockery::mock(\PDOStatement::class);
-        $statement->shouldReceive('fetchColumn')->andReturn($version);
-        $pdo->shouldReceive('query')->with('SELECT VERSION()')->andReturn($statement);
-    }
-
-    $db = Mockery::mock(MysqlDatabase::class)->makePartial()->shouldAllowMockingProtectedMethods();
-    $db->shouldReceive('createPdo')->andReturn($pdo);
-    $db->setConfig([
-        'host' => 'db.local',
-        'port' => 3306,
-        'user' => 'root',
-        'pass' => 'secret',
-        'database' => 'myapp',
-        'probe_server_version' => true,
-    ]);
-
-    return $db;
-}
-
-test('dump keeps --routines for servers the MariaDB client can dump routines from', function (?string $version) {
-    $result = mysqlDatabaseReportingVersion($version)->dump('/tmp/dump.sql');
-
-    expect($result->command)->toContain('--routines')
-        ->and($result->log)->toBeNull();
-})->with([
-    'MariaDB inside its own package range' => ['11.4.12-MariaDB-ubu2404'],
-    'MySQL on the pre-2026 scheme' => ['9.7.2'],
-    'MySQL 8' => ['8.4.11'],
-    'unreadable version' => [null],
-]);
-
-// MySQL 26.7 clears the client's >= 10.3 package gate, so --routines triggers
-// SHOW PACKAGE STATUS and MySQL rejects it with a syntax error (#494).
-test('dump drops --routines for MySQL versions that trip the MariaDB package check', function () {
-    $result = mysqlDatabaseReportingVersion('26.7.0')->dump('/tmp/dump.sql');
-
-    expect($result->command)->not->toContain('--routines')
-        ->and($result->command)->toContain('mariadb-dump --single-transaction --add-drop-table')
-        ->and($result->log?->level)->toBe('warning')
-        ->and($result->log?->message)->toContain('26.7.0');
-});
-
-test('dump does not probe the server when the config is not for a live server', function () {
-    $db = Mockery::mock(MysqlDatabase::class)->makePartial()->shouldAllowMockingProtectedMethods();
-    $db->shouldNotReceive('createPdo');
-    $db->setConfig(['host' => 'hostname', 'port' => 3306, 'user' => 'user', 'pass' => '***', 'database' => 'dbname']);
-
-    expect($db->dump('/path/to/output')->command)->toContain('--routines');
-});
-
-test('restore builds correct command with skip_ssl by default', function () {
+test('restore builds correct command with ssl-mode=DISABLED by default', function () {
     $result = $this->db->restore('/tmp/restore.sql');
 
     expect($result)->toBeInstanceOf(DatabaseOperationResult::class)
-        ->and($result->command)->toBe("mariadb --host='db.local' --port='3306' --user='root' --password='secret' --skip_ssl 'myapp' -e 'source /tmp/restore.sql'");
+        ->and($result->command)->toBe("mysql --host='db.local' --port='3306' --user='root' --password='secret' --ssl-mode=DISABLED 'myapp' -e 'source /tmp/restore.sql'");
 });
 
-test('restore uses ssl-verify-server-cert=0 when ssl_enabled is true', function () {
+test('restore uses ssl-mode=REQUIRED when ssl_enabled is true', function () {
     $db = new MysqlDatabase;
     $db->setConfig([
         'host' => 'db.local',
@@ -137,8 +89,8 @@ test('restore uses ssl-verify-server-cert=0 when ssl_enabled is true', function 
     $result = $db->restore('/tmp/restore.sql');
 
     expect($result->command)
-        ->toContain('--ssl --ssl-verify-server-cert=0')
-        ->not->toContain('--skip_ssl');
+        ->toContain('--ssl-mode=REQUIRED')
+        ->not->toContain('--ssl-mode=DISABLED');
 });
 
 test('testConnection returns success when process succeeds', function () {

@@ -261,6 +261,12 @@ dataset('database server configs', [
         'host' => 'mysql.example.com',
         'port' => 3306,
     ]],
+    'mariadb' => [[
+        'type' => 'mariadb',
+        'name' => 'MariaDB Server',
+        'host' => 'mariadb.example.com',
+        'port' => 3306,
+    ]],
     'postgres' => [[
         'type' => 'postgres',
         'name' => 'PostgreSQL Server',

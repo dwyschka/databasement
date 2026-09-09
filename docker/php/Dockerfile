@@ -44,7 +44,7 @@ RUN apk add --no-cache git \
         mariadb-client mariadb-connector-c \
         postgresql16-client postgresql18-client \
         supervisor \
-        gzip zstd 7zip \
+        gzip zstd 7zip xz \
         tzdata \
         shadow \
         findutils \
@@ -111,11 +111,48 @@ COPY --from=firebird \
     /lib/*-linux-gnu/libm.so.6 \
     /lib/*-linux-gnu/libpthread.so.0 \
     /lib/*-linux-gnu/libtommath.so.1 \
+    /lib/*-linux-gnu/libstdc++.so.6 \
+    /lib/*-linux-gnu/libresolv.so.2 \
+    /lib/*-linux-gnu/librt.so.1 \
+    /lib/*-linux-gnu/libncurses.so.6 \
+    /lib/*-linux-gnu/libtinfo.so.6 \
     /opt/firebird/compat/
 RUN ln -s /opt/firebird/compat/ld-linux-*.so.* /opt/firebird/compat/ld.so
 
 COPY scripts/firebird/gbak scripts/firebird/isql /usr/local/bin/
 RUN chmod 755 /usr/local/bin/gbak /usr/local/bin/isql
+
+# MySQL 8 client (mysql + mysqldump) — Alpine's apk mirrors only ship MariaDB's
+# client under these names (installed above as `mariadb-client`), and its CLI
+# has diverged from MySQL 8's (most visibly `--ssl-mode` vs `--ssl`), so a
+# genuine MySQL client is pulled from Oracle's official "Linux - Generic"
+# glibc tarball instead — it is not a MariaDB build or alias. Only the two
+# binaries the app uses are kept, run through the Firebird stage's glibc
+# loader above; the tarball's own bundled libssl/libcrypto (lib/private/) go
+# on the library path alongside it, since Alpine's musl libssl3 does not
+# apply to these glibc binaries. Refresh MYSQL_CLIENT_VERSION from
+# https://dev.mysql.com/downloads/mysql/ when bumping.
+ARG MYSQL_CLIENT_VERSION=8.4.11
+RUN case "${TARGETARCH}" in \
+        amd64) MYSQL_ARCH=x86_64 ;; \
+        arm64) MYSQL_ARCH=aarch64 ;; \
+        *) echo "Unsupported TARGETARCH: ${TARGETARCH}" >&2; exit 1 ;; \
+    esac \
+    && MYSQL_DIR="mysql-${MYSQL_CLIENT_VERSION}-linux-glibc2.28-${MYSQL_ARCH}" \
+    && curl -fsSL -o /tmp/mysql.tar.xz \
+        "https://cdn.mysql.com/Downloads/MySQL-8.4/${MYSQL_DIR}.tar.xz" \
+    && mkdir -p /opt/mysql/bin /opt/mysql/lib \
+    && xz -dc /tmp/mysql.tar.xz | tar -xf - -C /tmp \
+        "${MYSQL_DIR}/bin/mysql" \
+        "${MYSQL_DIR}/bin/mysqldump" \
+        "${MYSQL_DIR}/lib/private/libssl.so.3" \
+        "${MYSQL_DIR}/lib/private/libcrypto.so.3" \
+    && cp "/tmp/${MYSQL_DIR}/bin/mysql" "/tmp/${MYSQL_DIR}/bin/mysqldump" /opt/mysql/bin/ \
+    && cp "/tmp/${MYSQL_DIR}/lib/private/libssl.so.3" "/tmp/${MYSQL_DIR}/lib/private/libcrypto.so.3" /opt/mysql/lib/ \
+    && rm -rf /tmp/mysql.tar.xz "/tmp/${MYSQL_DIR}"
+
+COPY scripts/mysql-client/mysql scripts/mysql-client/mysqldump /usr/local/bin/
+RUN chmod 755 /usr/local/bin/mysql /usr/local/bin/mysqldump
 
 COPY supervisord.conf /config/supervisord.conf
 COPY php-custom-production.ini /usr/local/etc/php/php-custom-production.ini

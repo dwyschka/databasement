@@ -100,6 +100,51 @@ test('mysql backup and restore workflow', function (string $compression, string 
     'encrypted' => ['encrypted', '7z'],
 ]);
 
+test('mariadb backup and restore workflow', function () {
+    AppConfig::set('backup.compression', 'gzip');
+
+    app()->forgetInstance(CompressorInterface::class);
+    app()->forgetInstance(BackupTask::class);
+    app()->forgetInstance(RestoreTask::class);
+
+    $this->volume = IntegrationTestHelpers::createVolume('mariadb');
+    $this->databaseServer = IntegrationTestHelpers::createDatabaseServer('mariadb');
+    $this->backup = IntegrationTestHelpers::createBackup($this->databaseServer, $this->volume);
+    $this->databaseServer->load('backups.volumes');
+
+    IntegrationTestHelpers::loadTestData('mariadb', $this->databaseServer);
+
+    $snapshots = $this->backupJobFactory->createSnapshots(
+        backup: $this->backup,
+        method: 'manual',
+    );
+    $this->snapshot = $snapshots[0];
+    ProcessBackupJob::dispatchSync($this->snapshot->id);
+    $this->snapshot->refresh();
+    $this->snapshot->load('job');
+
+    $filesystem = $this->filesystemProvider->getForVolume($this->snapshot->files()->firstOrFail()->volume);
+
+    expect($this->snapshot->job->status)->toBe(BackupJobStatus::Completed)
+        ->and($this->snapshot->file_size)->toBeGreaterThan(0)
+        ->and($filesystem->fileExists($this->snapshot->filename))->toBeTrue();
+
+    $suffix = IntegrationTestHelpers::getParallelSuffix();
+    $this->restoredDatabaseName = 'testdb_restored_'.hrtime(true).$suffix;
+    $restore = $this->backupJobFactory->createRestore(
+        snapshot: $this->snapshot,
+        targetServer: $this->databaseServer,
+        schemaName: $this->restoredDatabaseName,
+    );
+    ProcessRestoreJob::dispatchSync($restore->id);
+
+    $pdo = IntegrationTestHelpers::connectToDatabase('mariadb', $this->databaseServer, $this->restoredDatabaseName);
+    $tables = $pdo->query('SHOW TABLES')->fetchAll(PDO::FETCH_COLUMN);
+    expect($tables)->toContain('users')->toContain('products')
+        ->and((int) $pdo->query('SELECT COUNT(*) FROM users')->fetchColumn())->toBe(2)
+        ->and((int) $pdo->query('SELECT COUNT(*) FROM products')->fetchColumn())->toBe(2);
+});
+
 test('postgres backup and restore workflow', function (?string $dumpFormat) {
     AppConfig::set('backup.compression', 'gzip');
 
@@ -189,6 +234,7 @@ test('backup with extra dump flags succeeds', function (string $type, string $fl
         ->and($this->snapshot->file_size)->toBeGreaterThan(0);
 })->with([
     'mysql with --verbose' => ['mysql', '--verbose'],
+    'mariadb with --verbose' => ['mariadb', '--verbose'],
     'postgres with --verbose' => ['postgres', '--verbose'],
     'mongodb with --verbose' => ['mongodb', '--verbose'],
 ]);

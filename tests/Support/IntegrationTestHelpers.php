@@ -48,6 +48,14 @@ class IntegrationTestHelpers
                 'database' => config('testing.databases.mysql.database').$suffix,
                 'database_type' => 'mysql',
             ],
+            'mariadb' => [
+                'host' => config('testing.databases.mariadb.host'),
+                'port' => (int) config('testing.databases.mariadb.port'),
+                'username' => config('testing.databases.mariadb.username'),
+                'password' => config('testing.databases.mariadb.password'),
+                'database' => config('testing.databases.mariadb.database').$suffix,
+                'database_type' => 'mariadb',
+            ],
             'postgres' => [
                 'host' => config('testing.databases.postgres.host'),
                 'port' => (int) config('testing.databases.postgres.port'),
@@ -496,7 +504,7 @@ class IntegrationTestHelpers
 
         $pdo = DatabaseType::from($type)->createPdo($server);
 
-        if ($type === 'mysql') {
+        if ($type === 'mysql' || $type === 'mariadb') {
             $pdo->exec("DROP DATABASE IF EXISTS `{$databaseName}`");
         } elseif ($type === 'postgres') {
             $pdo->exec("SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '{$databaseName}' AND pid <> pg_backend_pid()");
@@ -563,7 +571,7 @@ class IntegrationTestHelpers
 
         $pdo = DatabaseType::from($type)->createPdo($server);
 
-        if ($type === 'mysql') {
+        if ($type === 'mysql' || $type === 'mariadb') {
             $pdo->exec("DROP DATABASE IF EXISTS `{$databaseName}`");
             $pdo->exec("CREATE DATABASE `{$databaseName}`");
         } elseif ($type === 'postgres') {
@@ -574,6 +582,7 @@ class IntegrationTestHelpers
 
         $fixtureFile = match ($type) {
             'mysql' => __DIR__.'/../Integration/fixtures/mysql-init.sql',
+            'mariadb' => __DIR__.'/../Integration/fixtures/mariadb-init.sql',
             'postgres' => __DIR__.'/../Integration/fixtures/postgres-init.sql',
             default => throw new InvalidArgumentException("loadTestData does not support database type: {$type}. Use createTestSqliteDatabase for SQLite."),
         };

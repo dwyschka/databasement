@@ -41,7 +41,7 @@ class AdminerController extends Controller
     private function buildCredentials(DatabaseServer $server): array
     {
         $driver = match ($server->database_type) { // @phpstan-ignore match.unhandled (supportsAdminer() filters unsupported types)
-            DatabaseType::MYSQL => 'server',
+            DatabaseType::MYSQL, DatabaseType::MARIADB => 'server',
             DatabaseType::POSTGRESQL => 'pgsql',
             DatabaseType::SQLITE => 'sqlite',
         };

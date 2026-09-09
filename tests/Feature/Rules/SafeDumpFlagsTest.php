@@ -51,6 +51,11 @@ test('SafeDumpFlags accepts or rejects dump flags', function (DatabaseType $type
     // The same spelling is a legitimate option on another engine.
     'mysql --force is not the postgres --file' => [DatabaseType::MYSQL, '-f', true],
     'redis repeat count is not the mysql --result-file' => [DatabaseType::REDIS, '-r 5', true],
+
+    // The deny list is shared between the two clients (see MYSQL_FAMILY_DENIED).
+    'ordinary flags, mariadb' => [DatabaseType::MARIADB, '--single-transaction --no-tablespaces', true],
+    'mariadb config file, an indirect route to the same write' => [DatabaseType::MARIADB, '--defaults-extra-file=/tmp/evil.cnf', false],
+    'mariadb directory-format backup' => [DatabaseType::MARIADB, '-D/app/public', false],
 ]);
 
 test('SafeDumpFlags names the offending option', function () {

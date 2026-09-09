@@ -22,6 +22,7 @@ class DatabaseProvider
     {
         return match ($type) {
             DatabaseType::MYSQL => new MysqlDatabase,
+            DatabaseType::MARIADB => new MariadbDatabase,
             DatabaseType::POSTGRESQL => new PostgresqlDatabase,
             DatabaseType::SQLITE => new SqliteDatabase($this->sftpFilesystem),
             DatabaseType::REDIS => new RedisDatabase,
@@ -107,14 +108,15 @@ class DatabaseProvider
             $dbConfig['dump_flags'] = $extra['dump_flags'];
         }
 
-        if (in_array($config->databaseType, [DatabaseType::MYSQL, DatabaseType::POSTGRESQL], true) && ! empty($extra['ssl_enabled'])) {
+        if (in_array($config->databaseType, [DatabaseType::MYSQL, DatabaseType::MARIADB, DatabaseType::POSTGRESQL], true) && ! empty($extra['ssl_enabled'])) {
             $dbConfig['ssl_enabled'] = true;
         }
 
-        // Marks a live server: the handler may query it for the MySQL/MariaDB
-        // flavour, or for the PostgreSQL major that decides which client build
-        // to run. Display-only configs, like the dump preview, leave it unset.
-        if (in_array($config->databaseType, [DatabaseType::MYSQL, DatabaseType::POSTGRESQL], true)) {
+        // Marks a live server: the handler may query it for the server
+        // version (MariaDB's dump quirk), or for the PostgreSQL major that
+        // decides which client build to run. Display-only configs, like the
+        // dump preview, leave it unset.
+        if (in_array($config->databaseType, [DatabaseType::MYSQL, DatabaseType::MARIADB, DatabaseType::POSTGRESQL], true)) {
             $dbConfig['probe_server_version'] = true;
         }
 

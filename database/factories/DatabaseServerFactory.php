@@ -24,7 +24,7 @@ class DatabaseServerFactory extends Factory
             'name' => fake()->company().' '.fake()->randomElement(['MySQL', 'PostgreSQL', 'MariaDB']).' Server',
             'host' => fake()->randomElement(['localhost', '127.0.0.1', fake()->ipv4()]),
             'port' => fake()->randomElement([3306, 5432, 3307, 5433]),
-            'database_type' => fake()->randomElement(['mysql', 'postgres']),
+            'database_type' => fake()->randomElement(['mysql', 'mariadb', 'postgres']),
             'username' => fake()->userName(),
             'password' => fake()->password(),
             // SQLite uses this for file paths; other types leave it null so the
