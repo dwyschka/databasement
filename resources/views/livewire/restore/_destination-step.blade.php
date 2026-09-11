@@ -85,7 +85,7 @@
         </div>
     @endif
 
-    @if(in_array($type, [DatabaseType::MYSQL, DatabaseType::POSTGRESQL], true))
+    @if(in_array($type, [DatabaseType::MYSQL, DatabaseType::MARIADB, DatabaseType::POSTGRESQL], true))
         <x-checkbox
             wire:model="forceDatabase"
             :label="__('Drop and recreate database before restore')"

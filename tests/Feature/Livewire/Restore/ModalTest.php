@@ -495,6 +495,17 @@ test('destination step offers a database owner field whatever the snapshot prese
     'portable snapshot' => [false, 'Transfer database ownership to user after restore'],
 ]);
 
+test('destination step offers the drop-and-recreate option for MySQL and MariaDB targets alike', function (string $type) {
+    $target = DatabaseServer::factory()->create(['database_type' => $type]);
+    $source = DatabaseServer::factory()->create(['database_type' => $type]);
+    $snapshot = Snapshot::factory()->forServer($source)->withFile()->create();
+
+    Livewire::test(Modal::class)
+        ->dispatch('open-restore-modal', mode: 'from-server', targetServerId: $target->id)
+        ->call('selectSnapshot', $snapshot->id)
+        ->assertSee(__('Drop and recreate database before restore'));
+})->with(['mysql', 'mariadb']);
+
 test('the owner of a privilege-preserving restore reaches the queued job', function () {
     Queue::fake();
 

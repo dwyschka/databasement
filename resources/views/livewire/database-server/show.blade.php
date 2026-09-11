@@ -356,7 +356,7 @@
                                 <div class="text-sm font-mono tracking-widest opacity-60">{{ $server->password ? '••••••••' : '—' }}</div>
                             </div>
                         </li>
-                        @if($server->database_type === DatabaseType::MYSQL)
+                        @if(in_array($server->database_type, [DatabaseType::MYSQL, DatabaseType::MARIADB], true))
                             <li class="list-row">
                                 <x-icon name="o-shield-check" class="w-4 h-4 opacity-60" />
                                 <div>
