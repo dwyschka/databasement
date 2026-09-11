@@ -22,7 +22,7 @@ use App\Support\Formatters;
  * Connection tests, listDatabases, and the drop-before-publish step in
  * prepareForRestore use the `pdo_sqlsrv` extension.
  */
-class MssqlDatabase implements DatabaseInterface
+class MssqlDatabase implements DatabaseInterface, RunsCustomQueries
 {
     /** @var array<string, mixed> */
     private array $config;
@@ -133,6 +133,20 @@ class MssqlDatabase implements DatabaseInterface
             $databases,
             fn ($db): bool => ! in_array($db, self::EXCLUDED_DATABASES, true),
         ));
+    }
+
+    public function executeQueries(string $schemaName, array $queries, BackupLogger $logger): void
+    {
+        try {
+            $pdo = $this->createPdoForDatabase($schemaName);
+
+            foreach ($queries as $query) {
+                $logger->logCommand($query, null, 0);
+                $pdo->exec($query);
+            }
+        } catch (\PDOException $e) {
+            throw new ConnectionException("Failed to run custom post-restore queries: {$e->getMessage()}", 0, $e);
+        }
     }
 
     public function testConnection(): array

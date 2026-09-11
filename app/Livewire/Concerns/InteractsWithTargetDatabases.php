@@ -31,6 +31,12 @@ trait InteractsWithTargetDatabases
     /** Transfer database ownership to this user after restore (PostgreSQL only). */
     public string $ownerUser = '';
 
+    /**
+     * Semicolon-separated SQL to run against the restored database once the
+     * restore completes (MySQL/MariaDB/PostgreSQL/SQL Server only).
+     */
+    public string $postRestoreQueries = '';
+
     /** @var array<int, string> */
     public array $existingDatabases = [];
 
@@ -66,6 +72,7 @@ trait InteractsWithTargetDatabases
         return array_filter([
             'force_database' => $this->forceDatabase ?: null,
             'owner_user' => ($owner = trim($this->ownerUser)) !== '' ? $owner : null,
+            'post_restore_queries' => ($queries = trim($this->postRestoreQueries)) !== '' ? $queries : null,
         ]);
     }
 

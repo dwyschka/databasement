@@ -77,7 +77,7 @@ class Modal extends Component
         $this->reset([
             'targetServer', 'targetServerId', 'selectedSnapshotId', 'selectedSnapshotFileId',
             'schemaName', 'forceDatabase',
-            'ownerUser', 'currentStep', 'existingDatabases', 'snapshotSearch',
+            'ownerUser', 'postRestoreQueries', 'currentStep', 'existingDatabases', 'snapshotSearch',
             'serverFilter', 'dbTypeFilter',
         ]);
         $this->resetPage('snapshots');
@@ -172,6 +172,7 @@ class Modal extends Component
         $this->schemaName = $restore->schema_name;
         $this->forceDatabase = (bool) ($restore->options['force_database'] ?? false);
         $this->ownerUser = (string) ($restore->options['owner_user'] ?? '');
+        $this->postRestoreQueries = (string) ($restore->options['post_restore_queries'] ?? '');
         $this->loadExistingDatabases($this->targetServer);
         $this->currentStep = 2;
 
@@ -336,6 +337,7 @@ class Modal extends Component
         }
 
         $this->validateSchemaName();
+        $this->validate(['postRestoreQueries' => 'nullable|string|max:20000']);
 
         try {
             $snapshot = Snapshot::findOrFail($this->selectedSnapshotId);

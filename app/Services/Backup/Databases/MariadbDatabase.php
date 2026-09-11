@@ -11,7 +11,7 @@ use App\Support\Formatters;
 use Illuminate\Process\Exceptions\ProcessTimedOutException;
 use Illuminate\Support\Facades\Process;
 
-class MariadbDatabase implements DatabaseInterface
+class MariadbDatabase implements DatabaseInterface, RunsCustomQueries
 {
     /** @var array<string, mixed> */
     private array $config;
@@ -192,6 +192,21 @@ class MariadbDatabase implements DatabaseInterface
         $databases = $statement->fetchAll(\PDO::FETCH_COLUMN, 0);
 
         return array_values(array_filter($databases, fn ($db) => ! in_array($db, self::EXCLUDED_DATABASES)));
+    }
+
+    public function executeQueries(string $schemaName, array $queries, BackupLogger $logger): void
+    {
+        try {
+            $pdo = $this->createPdo();
+            $pdo->exec('USE `'.str_replace('`', '', $schemaName).'`');
+
+            foreach ($queries as $query) {
+                $logger->logCommand($query, null, 0);
+                $pdo->exec($query);
+            }
+        } catch (\PDOException $e) {
+            throw new ConnectionException("Failed to run custom post-restore queries: {$e->getMessage()}", 0, $e);
+        }
     }
 
     public function testConnection(): array

@@ -61,6 +61,7 @@ test('creates a scheduled restore end-to-end', function () {
         ->set('schemaName', 'restored_db')
         ->set('forceDatabase', true)
         ->set('ownerUser', 'webapp')
+        ->set('postRestoreQueries', 'DELETE FROM sessions;')
         ->call('save')
         ->assertDispatched('scheduled-restore-saved');
 
@@ -72,7 +73,8 @@ test('creates a scheduled restore end-to-end', function () {
         ->and($scheduled->backup_schedule_id)->toBe($schedule->id)
         ->and($scheduled->enabled)->toBeTrue()
         ->and($scheduled->getOption('force_database'))->toBeTrue()
-        ->and($scheduled->getOption('owner_user'))->toBe('webapp');
+        ->and($scheduled->getOption('owner_user'))->toBe('webapp')
+        ->and($scheduled->getOption('post_restore_queries'))->toBe('DELETE FROM sessions;');
 });
 
 test('edits an existing scheduled restore', function () {
@@ -100,6 +102,26 @@ test('edits an existing scheduled restore', function () {
     expect($scheduled->fresh())
         ->name->toBe('Updated name')
         ->backup_schedule_id->toBe($schedule2->id);
+});
+
+test('opening a scheduled restore for editing pre-fills its custom post-restore queries', function () {
+    $schedule = dailySchedule();
+    $source = DatabaseServer::factory()->create(['database_type' => 'mysql', 'database_names' => ['app']]);
+    $target = DatabaseServer::factory()->create(['database_type' => 'mysql']);
+    Snapshot::factory()->forServer($source)->create(['database_name' => 'app']);
+
+    $scheduled = ScheduledRestore::factory()->create([
+        'source_server_id' => $source->id,
+        'target_server_id' => $target->id,
+        'source_database_name' => 'app',
+        'schema_name' => 'restored_db',
+        'backup_schedule_id' => $schedule->id,
+        'options' => ['post_restore_queries' => 'DELETE FROM sessions;'],
+    ]);
+
+    Livewire::test(Modal::class)
+        ->call('open', $scheduled->id)
+        ->assertSet('postRestoreQueries', 'DELETE FROM sessions;');
 });
 
 test('without operate-restores, opening the create modal is forbidden', function () {

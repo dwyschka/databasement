@@ -1,7 +1,9 @@
 <?php
 
+use App\Exceptions\Backup\ConnectionException;
 use App\Services\Backup\Databases\MariadbDatabase;
 use App\Services\Backup\DTO\DatabaseOperationResult;
+use App\Services\Backup\InMemoryBackupLogger;
 use Illuminate\Support\Facades\Process;
 
 beforeEach(function () {
@@ -174,6 +176,32 @@ test('listDatabases returns databases excluding system databases', function () {
     $databases = $db->listDatabases();
 
     expect($databases)->toBe(['app_database', 'test_database']);
+});
+
+test('executeQueries selects the restored database and runs each statement', function () {
+    $pdo = Mockery::mock(PDO::class);
+    $pdo->shouldReceive('exec')->once()->with('USE `restored_db`');
+    $pdo->shouldReceive('exec')->once()->with('UPDATE users SET password = NULL');
+    $pdo->shouldReceive('exec')->once()->with('DELETE FROM sessions');
+
+    $db = Mockery::mock(MariadbDatabase::class)->makePartial()->shouldAllowMockingProtectedMethods();
+    $db->shouldReceive('createPdo')->once()->andReturn($pdo);
+    $db->setConfig(['host' => 'db.local', 'port' => 3306, 'user' => 'root', 'pass' => 'secret', 'database' => 'restored_db']);
+
+    $db->executeQueries('restored_db', ['UPDATE users SET password = NULL', 'DELETE FROM sessions'], new InMemoryBackupLogger);
+});
+
+test('executeQueries wraps a failing statement in a ConnectionException', function () {
+    $pdo = Mockery::mock(PDO::class);
+    $pdo->shouldReceive('exec')->once()->with('USE `restored_db`');
+    $pdo->shouldReceive('exec')->once()->with('GARBAGE')->andThrow(new PDOException('syntax error'));
+
+    $db = Mockery::mock(MariadbDatabase::class)->makePartial()->shouldAllowMockingProtectedMethods();
+    $db->shouldReceive('createPdo')->once()->andReturn($pdo);
+    $db->setConfig(['host' => 'db.local', 'port' => 3306, 'user' => 'root', 'pass' => 'secret', 'database' => 'restored_db']);
+
+    expect(fn () => $db->executeQueries('restored_db', ['GARBAGE'], new InMemoryBackupLogger))
+        ->toThrow(ConnectionException::class, 'Failed to run custom post-restore queries');
 });
 
 test('testConnection returns failure when process fails', function () {

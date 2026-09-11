@@ -107,6 +107,12 @@ class RestoreTask
                 $database->transferOwnership($config->schemaName, $config->ownerUser, $logger);
             }
 
+            $customQueries = self::splitStatements($config->postRestoreQueries ?? '');
+            if ($customQueries !== [] && $database instanceof Databases\RunsCustomQueries) {
+                $logger->log('Running custom post-restore queries', 'info', ['count' => count($customQueries)]);
+                $database->executeQueries($config->schemaName, $customQueries, $logger);
+            }
+
             // Mark job as completed
             $logger->log('Restore completed successfully', 'success');
 
@@ -150,5 +156,21 @@ class RestoreTask
     protected function prepareDatabase(DatabaseInterface $database, string $schemaName, BackupLogger $logger, bool $forceDatabase = false): void
     {
         $database->prepareForRestore($schemaName, $logger, $forceDatabase);
+    }
+
+    /**
+     * Split a semicolon-separated block of custom SQL into individual,
+     * trimmed, non-empty statements. A blunt split — it does not understand
+     * quoted strings or comments containing `;` — matching what the
+     * destination step documents the field as accepting.
+     *
+     * @return array<int, string>
+     */
+    private static function splitStatements(string $sql): array
+    {
+        return array_values(array_filter(
+            array_map('trim', explode(';', $sql)),
+            fn (string $statement): bool => $statement !== '',
+        ));
     }
 }
