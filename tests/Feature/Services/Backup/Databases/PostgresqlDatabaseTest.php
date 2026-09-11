@@ -272,6 +272,28 @@ test('ownership transfer leaves the restored objects alone for a snapshot that c
     $db->transferOwnership('restored_db', 'webapp', new InMemoryBackupLogger);
 });
 
+test('executeQueries runs each statement against the restored database', function () {
+    $pdo = Mockery::mock(PDO::class);
+    $pdo->shouldReceive('exec')->once()->with('UPDATE users SET password = NULL');
+    $pdo->shouldReceive('exec')->once()->with('DELETE FROM sessions');
+
+    $db = Mockery::mock(PostgresqlDatabase::class)->makePartial()->shouldAllowMockingProtectedMethods();
+    $db->shouldReceive('createPdoForDatabase')->once()->with('restored_db')->andReturn($pdo);
+
+    $db->executeQueries('restored_db', ['UPDATE users SET password = NULL', 'DELETE FROM sessions'], new InMemoryBackupLogger);
+});
+
+test('executeQueries wraps a failing statement in a ConnectionException', function () {
+    $pdo = Mockery::mock(PDO::class);
+    $pdo->shouldReceive('exec')->once()->andThrow(new PDOException('syntax error'));
+
+    $db = Mockery::mock(PostgresqlDatabase::class)->makePartial()->shouldAllowMockingProtectedMethods();
+    $db->shouldReceive('createPdoForDatabase')->once()->with('restored_db')->andReturn($pdo);
+
+    expect(fn () => $db->executeQueries('restored_db', ['GARBAGE'], new InMemoryBackupLogger))
+        ->toThrow(ConnectionException::class, 'Failed to run custom post-restore queries');
+});
+
 /**
  * A handler on a live server reporting $serverVersion, exactly as PDO hands it
  * back from ATTR_SERVER_VERSION. Null stands for a server that cannot be read.

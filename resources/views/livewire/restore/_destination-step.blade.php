@@ -92,5 +92,15 @@
             :hint="__('Not usually needed — dumps already include per-table DROP/CREATE statements. Use this only if you need a completely clean database (e.g. to remove tables not in the snapshot).')"
         />
     @endif
+
+    @if(in_array($type, [DatabaseType::MYSQL, DatabaseType::MARIADB, DatabaseType::POSTGRESQL, DatabaseType::MSSQL], true))
+        <x-textarea
+            wire:model="postRestoreQueries"
+            :label="__('Custom SQL to run after restore')"
+            placeholder="UPDATE users SET password = NULL WHERE email NOT LIKE '%@ourcompany.com';"
+            :hint="__('Optional. One or more semicolon-separated statements, run against :database once the restore succeeds — for example, scrubbing data restored from production. Skipped entirely if the restore fails.', ['database' => $schemaName ?: __('the restored database')])"
+            rows="3"
+        />
+    @endif
 @endif
 

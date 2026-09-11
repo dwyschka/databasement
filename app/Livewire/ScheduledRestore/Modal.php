@@ -42,7 +42,7 @@ class Modal extends Component
     {
         $this->reset([
             'currentStep', 'editingId', 'sourceServerId', 'sourceDatabaseName',
-            'targetServerId', 'schemaName', 'forceDatabase', 'ownerUser',
+            'targetServerId', 'schemaName', 'forceDatabase', 'ownerUser', 'postRestoreQueries',
             'name', 'backupScheduleId', 'enabled', 'existingDatabases',
         ]);
         $this->resetValidation();
@@ -58,6 +58,7 @@ class Modal extends Component
             $this->schemaName = $scheduledRestore->schema_name;
             $this->forceDatabase = (bool) $scheduledRestore->getOption('force_database', false);
             $this->ownerUser = (string) $scheduledRestore->getOption('owner_user', '');
+            $this->postRestoreQueries = (string) $scheduledRestore->getOption('post_restore_queries', '');
             $this->name = $scheduledRestore->name;
             $this->backupScheduleId = $scheduledRestore->backup_schedule_id;
             $this->enabled = $scheduledRestore->enabled;
@@ -107,6 +108,7 @@ class Modal extends Component
         $this->validateScheduleStep();
         $this->validateSourceStep();
         $this->validateTargetStep();
+        $this->validate(['postRestoreQueries' => 'nullable|string|max:20000']);
 
         $payload = [
             'name' => $this->name,

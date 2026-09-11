@@ -513,3 +513,60 @@ test('the owner of a privilege-preserving restore reaches the queued job', funct
 
     expect(Restore::firstOrFail()->getOption('owner_user'))->toBe('webapp');
 });
+
+test('destination step offers the custom SQL field for MySQL/MariaDB/PostgreSQL/SQL Server targets, not SQLite', function (string $type, bool $expectField) {
+    $target = DatabaseServer::factory()->create(['database_type' => $type]);
+    $source = DatabaseServer::factory()->create(['database_type' => $type]);
+    $snapshot = Snapshot::factory()->forServer($source)->withFile()->create();
+
+    $component = Livewire::test(Modal::class)
+        ->dispatch('open-restore-modal', mode: 'from-server', targetServerId: $target->id)
+        ->call('selectSnapshot', $snapshot->id);
+
+    if ($expectField) {
+        $component->assertSee(__('Custom SQL to run after restore'));
+    } else {
+        $component->assertDontSee(__('Custom SQL to run after restore'));
+    }
+})->with([
+    'mysql' => ['mysql', true],
+    'mariadb' => ['mariadb', true],
+    'postgres' => ['postgres', true],
+    'sqlite' => ['sqlite', false],
+]);
+
+test('custom post-restore queries reach the queued job', function () {
+    Queue::fake();
+
+    $target = DatabaseServer::factory()->create(['database_type' => 'mysql']);
+    $source = DatabaseServer::factory()->create(['database_type' => 'mysql']);
+    $snapshot = Snapshot::factory()->forServer($source)->withFile()->create();
+
+    Livewire::test(Modal::class)
+        ->dispatch('open-restore-modal', mode: 'from-server', targetServerId: $target->id)
+        ->call('selectSnapshot', $snapshot->id)
+        ->set('schemaName', 'restored_db')
+        ->set('postRestoreQueries', "UPDATE users SET password = NULL;\nDELETE FROM sessions;")
+        ->call('restore');
+
+    expect(Restore::firstOrFail()->getOption('post_restore_queries'))
+        ->toBe("UPDATE users SET password = NULL;\nDELETE FROM sessions;");
+});
+
+test('re-running a restore from the index pre-fills its custom post-restore queries', function () {
+    $target = DatabaseServer::factory()->create(['database_type' => 'mysql']);
+    $source = DatabaseServer::factory()->create(['database_type' => 'mysql']);
+    $snapshot = Snapshot::factory()->forServer($source)->withFile()->create();
+    $job = BackupJob::create(['status' => 'completed']);
+    $restore = Restore::create([
+        'backup_job_id' => $job->id,
+        'snapshot_id' => $snapshot->id,
+        'target_server_id' => $target->id,
+        'schema_name' => 'restored_db',
+        'options' => ['post_restore_queries' => 'DELETE FROM sessions;'],
+    ]);
+
+    Livewire::test(Modal::class)
+        ->dispatch('open-restore-modal', mode: 'from-restore-index', restoreId: $restore->id)
+        ->assertSet('postRestoreQueries', 'DELETE FROM sessions;');
+});
