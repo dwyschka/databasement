@@ -123,6 +123,7 @@ class ProcessRestoreJob implements ShouldQueue
                 snapshotDumpFormat: is_string($format = ($snapshot->metadata['dump_format'] ?? null)) ? $format : null,
                 snapshotDumpPrivileges: (bool) ($snapshot->metadata['dump_privileges'] ?? false),
                 postRestoreScript: AppConfig::get('backup.post_restore_script'),
+                postRestoreQueries: is_string($value = $restore->getOption('post_restore_queries')) && trim($value) !== '' ? $value : null,
             );
 
             $restoreTask->execute($config, $job);

@@ -1,7 +1,9 @@
 <?php
 
+use App\Exceptions\Backup\ConnectionException;
 use App\Services\Backup\Databases\MssqlDatabase;
 use App\Services\Backup\DTO\DatabaseOperationResult;
+use App\Services\Backup\InMemoryBackupLogger;
 
 beforeEach(function () {
     $this->db = new MssqlDatabase;
@@ -81,6 +83,28 @@ test('listDatabases filters out system databases', function () {
     $db->setConfig(['host' => 'h', 'port' => 1433, 'user' => 'u', 'pass' => 'p', 'database' => '']);
 
     expect($db->listDatabases())->toBe(['app_db', 'reports']);
+});
+
+test('executeQueries connects to the restored database and runs each statement', function () {
+    $pdo = Mockery::mock(PDO::class);
+    $pdo->shouldReceive('exec')->once()->with('UPDATE users SET password = NULL');
+    $pdo->shouldReceive('exec')->once()->with('DELETE FROM sessions');
+
+    $db = Mockery::mock(MssqlDatabase::class)->makePartial()->shouldAllowMockingProtectedMethods();
+    $db->shouldReceive('createPdoForDatabase')->once()->with('restored_db')->andReturn($pdo);
+
+    $db->executeQueries('restored_db', ['UPDATE users SET password = NULL', 'DELETE FROM sessions'], new InMemoryBackupLogger);
+});
+
+test('executeQueries wraps a failing statement in a ConnectionException', function () {
+    $pdo = Mockery::mock(PDO::class);
+    $pdo->shouldReceive('exec')->once()->andThrow(new PDOException('syntax error'));
+
+    $db = Mockery::mock(MssqlDatabase::class)->makePartial()->shouldAllowMockingProtectedMethods();
+    $db->shouldReceive('createPdoForDatabase')->once()->with('restored_db')->andReturn($pdo);
+
+    expect(fn () => $db->executeQueries('restored_db', ['GARBAGE'], new InMemoryBackupLogger))
+        ->toThrow(ConnectionException::class, 'Failed to run custom post-restore queries');
 });
 
 test('testConnection returns success with parsed version', function () {

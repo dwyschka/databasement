@@ -11,7 +11,7 @@ use App\Support\Formatters;
 use Illuminate\Process\Exceptions\ProcessTimedOutException;
 use Illuminate\Support\Facades\Process;
 
-class PostgresqlDatabase implements DatabaseInterface
+class PostgresqlDatabase implements DatabaseInterface, RunsCustomQueries
 {
     /**
      * Database opened when the server names none of its own. Conventional on a
@@ -385,6 +385,20 @@ class PostgresqlDatabase implements DatabaseInterface
             $targetPdo->exec($statements['objects']);
         } catch (\PDOException $e) {
             throw new ConnectionException("Failed to transfer ownership: {$e->getMessage()}", 0, $e);
+        }
+    }
+
+    public function executeQueries(string $schemaName, array $queries, BackupLogger $logger): void
+    {
+        try {
+            $pdo = $this->createPdoForDatabase($schemaName);
+
+            foreach ($queries as $query) {
+                $logger->logCommand($query, null, 0);
+                $pdo->exec($query);
+            }
+        } catch (\PDOException $e) {
+            throw new ConnectionException("Failed to run custom post-restore queries: {$e->getMessage()}", 0, $e);
         }
     }
 

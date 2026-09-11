@@ -217,6 +217,130 @@ test('execute passes forceDatabase flag to prepareForRestore', function () {
     $restoreTask->execute($config, new InMemoryBackupLogger);
 });
 
+test('execute calls executeQueries when postRestoreQueries is set and the handler supports it', function () {
+    $mockHandler = Mockery::mock(\App\Services\Backup\Databases\MysqlDatabase::class);
+    $mockHandler->shouldReceive('prepareForRestore')->once()->andReturnNull();
+    $mockHandler->shouldReceive('restore')
+        ->once()
+        ->andReturn(new DatabaseOperationResult(command: "echo 'fake restore'"));
+    $mockHandler->shouldReceive('executeQueries')
+        ->once()
+        ->with('restored_db', ['UPDATE users SET password = NULL', 'DELETE FROM sessions'], Mockery::type(InMemoryBackupLogger::class));
+
+    $mockProvider = Mockery::mock(DatabaseProvider::class);
+    $mockProvider->shouldReceive('makeFromConfig')->once()->andReturn($mockHandler);
+
+    setupDownloadMock();
+
+    $restoreTask = new RestoreTask(
+        $mockProvider,
+        $this->shellProcessor,
+        $this->filesystemProvider,
+        $this->compressorFactory,
+        $this->sshTunnelService,
+        new PostScriptRunner,
+    );
+
+    $config = new RestoreConfig(
+        targetServer: buildTargetConfig(),
+        snapshotVolume: buildSnapshotVolumeConfig(),
+        snapshotFilename: 'backup.sql.gz',
+        snapshotFileSize: 1024,
+        snapshotCompressionType: CompressionType::GZIP,
+        snapshotDatabaseType: DatabaseType::MYSQL,
+        snapshotDatabaseName: 'sourcedb',
+        schemaName: 'restored_db',
+        workingDirectory: $this->tempDir.'/queries-test-'.uniqid(),
+        // Blank/whitespace-only statements (blank line, trailing `;`) are dropped.
+        postRestoreQueries: "UPDATE users SET password = NULL;\n\n DELETE FROM sessions ;  ; ",
+    );
+
+    mkdir($config->workingDirectory, 0755, true);
+
+    $logger = new InMemoryBackupLogger;
+    $restoreTask->execute($config, $logger);
+
+    $infoLogs = collect($logger->getLogs())->where('level', 'info')->pluck('message')->toArray();
+    expect($infoLogs)->toContain('Running custom post-restore queries');
+});
+
+test('execute does not call executeQueries when the handler does not support custom queries', function () {
+    $mockHandler = Mockery::mock(DatabaseInterface::class);
+    $mockHandler->shouldReceive('prepareForRestore')->once()->andReturnNull();
+    $mockHandler->shouldReceive('restore')
+        ->once()
+        ->andReturn(new DatabaseOperationResult(command: "echo 'fake restore'"));
+
+    $mockProvider = Mockery::mock(DatabaseProvider::class);
+    $mockProvider->shouldReceive('makeFromConfig')->once()->andReturn($mockHandler);
+
+    setupDownloadMock();
+
+    $restoreTask = new RestoreTask(
+        $mockProvider,
+        $this->shellProcessor,
+        $this->filesystemProvider,
+        $this->compressorFactory,
+        $this->sshTunnelService,
+        new PostScriptRunner,
+    );
+
+    $config = new RestoreConfig(
+        targetServer: buildTargetConfig(),
+        snapshotVolume: buildSnapshotVolumeConfig(),
+        snapshotFilename: 'backup.sql.gz',
+        snapshotFileSize: 1024,
+        snapshotCompressionType: CompressionType::GZIP,
+        snapshotDatabaseType: DatabaseType::MYSQL,
+        snapshotDatabaseName: 'sourcedb',
+        schemaName: 'restored_db',
+        workingDirectory: $this->tempDir.'/queries-unsupported-'.uniqid(),
+        postRestoreQueries: 'UPDATE users SET password = NULL',
+    );
+
+    mkdir($config->workingDirectory, 0755, true);
+    $restoreTask->execute($config, new InMemoryBackupLogger);
+});
+
+test('execute skips executeQueries when postRestoreQueries has no statements', function () {
+    $mockHandler = Mockery::mock(\App\Services\Backup\Databases\MysqlDatabase::class);
+    $mockHandler->shouldReceive('prepareForRestore')->once()->andReturnNull();
+    $mockHandler->shouldReceive('restore')
+        ->once()
+        ->andReturn(new DatabaseOperationResult(command: "echo 'fake restore'"));
+    $mockHandler->shouldNotReceive('executeQueries');
+
+    $mockProvider = Mockery::mock(DatabaseProvider::class);
+    $mockProvider->shouldReceive('makeFromConfig')->once()->andReturn($mockHandler);
+
+    setupDownloadMock();
+
+    $restoreTask = new RestoreTask(
+        $mockProvider,
+        $this->shellProcessor,
+        $this->filesystemProvider,
+        $this->compressorFactory,
+        $this->sshTunnelService,
+        new PostScriptRunner,
+    );
+
+    $config = new RestoreConfig(
+        targetServer: buildTargetConfig(),
+        snapshotVolume: buildSnapshotVolumeConfig(),
+        snapshotFilename: 'backup.sql.gz',
+        snapshotFileSize: 1024,
+        snapshotCompressionType: CompressionType::GZIP,
+        snapshotDatabaseType: DatabaseType::MYSQL,
+        snapshotDatabaseName: 'sourcedb',
+        schemaName: 'restored_db',
+        workingDirectory: $this->tempDir.'/queries-blank-'.uniqid(),
+        postRestoreQueries: '  ;  ;  ',
+    );
+
+    mkdir($config->workingDirectory, 0755, true);
+    $restoreTask->execute($config, new InMemoryBackupLogger);
+});
+
 test('execute restores successfully', function () {
     $mockProvider = buildMockRestoreProvider();
     setupDownloadMock();

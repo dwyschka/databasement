@@ -28,6 +28,20 @@ test('show page renders server name, host and connection details', function () {
         ->assertSee('dbuser');
 });
 
+test('show page displays the SSL status for a MariaDB server', function () {
+    // MySQL and MariaDB share ssl_enabled handling — the SSL row must show for both.
+    $user = User::factory()->withAbilities([])->create();
+    $server = DatabaseServer::factory()->withoutBackups()->create([
+        'database_type' => 'mariadb',
+        'extra_config' => ['ssl_enabled' => true],
+    ]);
+
+    Livewire::actingAs($user)
+        ->test(Show::class, ['server' => $server])
+        ->assertSee(__('SSL'))
+        ->assertSee(__('Enabled'));
+});
+
 test('show page never exposes the password', function () {
     // Viewing needs no ability — an org member with zero grants can view a server.
     $user = User::factory()->withAbilities([])->create();
