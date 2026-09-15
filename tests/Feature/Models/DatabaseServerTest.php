@@ -100,6 +100,53 @@ test('supportsAdminer is false for agent-backed servers', function () {
         ->and($direct->supportsAdminer())->toBeTrue();
 });
 
+test('supportsPhpMyAdmin requires the type, the flag and a URL', function () {
+    $notEnabled = DatabaseServer::factory()->create(['database_type' => 'mysql']);
+    $enabled = DatabaseServer::factory()->create([
+        'database_type' => 'mariadb',
+        'extra_config' => ['phpmyadmin_enabled' => true, 'phpmyadmin_url' => 'https://panel.example.com/phpmyadmin/'],
+    ]);
+    $wrongType = DatabaseServer::factory()->create([
+        'database_type' => 'postgres',
+        'extra_config' => ['phpmyadmin_enabled' => true, 'phpmyadmin_url' => 'https://panel.example.com/phpmyadmin/'],
+    ]);
+
+    expect($notEnabled->supportsPhpMyAdmin())->toBeFalse()
+        ->and($enabled->supportsPhpMyAdmin())->toBeTrue()
+        ->and($wrongType->supportsPhpMyAdmin())->toBeFalse();
+});
+
+test('supportsPhpMyAdmin is unaffected by SSH tunnels or agents, unlike supportsAdminer', function () {
+    $server = DatabaseServer::factory()->withSshTunnel()->create([
+        'database_type' => 'mysql',
+        'extra_config' => ['phpmyadmin_enabled' => true, 'phpmyadmin_url' => 'https://panel.example.com/phpmyadmin/'],
+    ]);
+
+    expect($server->supportsAdminer())->toBeFalse()
+        ->and($server->supportsPhpMyAdmin())->toBeTrue();
+});
+
+test('buildPhpMyAdminUrl pre-fills host, port and username but never the password', function () {
+    $server = DatabaseServer::factory()->create([
+        'database_type' => 'mysql',
+        'host' => 'db.example.com',
+        'port' => 3307,
+        'username' => 'dbuser',
+        'password' => 'super-secret',
+        'extra_config' => ['phpmyadmin_enabled' => true, 'phpmyadmin_url' => 'https://panel.example.com/phpmyadmin/'],
+    ]);
+
+    expect($server->buildPhpMyAdminUrl())
+        ->toBe('https://panel.example.com/phpmyadmin/?server=db.example.com&port=3307&user=dbuser')
+        ->not->toContain('super-secret');
+});
+
+test('buildPhpMyAdminUrl returns null when phpMyAdmin is not supported', function () {
+    $server = DatabaseServer::factory()->create(['database_type' => 'mysql']);
+
+    expect($server->buildPhpMyAdminUrl())->toBeNull();
+});
+
 test('requiresSftpTransfer returns correct value', function () {
     $sqliteWithSsh = DatabaseServer::factory()->sqliteRemote()->create();
     $sqliteLocal = DatabaseServer::factory()->sqlite()->create();

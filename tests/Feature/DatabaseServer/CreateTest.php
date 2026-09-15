@@ -332,6 +332,55 @@ test('can create mysql database server with ssl_enabled', function () {
     expect($server->getExtraConfig('ssl_enabled'))->toBeTrue();
 });
 
+test('can create mysql database server with phpmyadmin enabled', function () {
+    $user = User::factory()->withAbilities([Ability::ManageDatabaseServers->value])->create();
+    $volume = Volume::factory()->local()->create(['name' => 'Test Volume']);
+
+    Livewire::actingAs($user)
+        ->test(Create::class)
+        ->set('form.name', 'MySQL With phpMyAdmin')
+        ->set('form.database_type', 'mysql')
+        ->set('form.host', 'mysql.example.com')
+        ->set('form.port', 3306)
+        ->set('form.username', 'dbuser')
+        ->set('form.password', 'secret123')
+        ->set('form.phpmyadmin_enabled', true)
+        ->set('form.phpmyadmin_url', 'https://panel.example.com/phpmyadmin/')
+        ->set('form.backups.0.database_names.0', 'myapp')
+        ->set('form.backups.0.volume_ids', [$volume->id])
+        ->set('form.backups.0.backup_schedule_id', dailySchedule()->id)
+        ->set('form.backups.0.retention_days', 14)
+        ->call('save')
+        ->assertHasNoErrors();
+
+    $server = DatabaseServer::where('name', 'MySQL With phpMyAdmin')->first();
+
+    expect($server->getExtraConfig('phpmyadmin_enabled'))->toBeTrue()
+        ->and($server->getExtraConfig('phpmyadmin_url'))->toBe('https://panel.example.com/phpmyadmin/')
+        ->and($server->supportsPhpMyAdmin())->toBeTrue();
+});
+
+test('enabling phpmyadmin without a URL fails validation', function () {
+    $user = User::factory()->withAbilities([Ability::ManageDatabaseServers->value])->create();
+    $volume = Volume::factory()->local()->create(['name' => 'Test Volume']);
+
+    Livewire::actingAs($user)
+        ->test(Create::class)
+        ->set('form.name', 'MySQL Missing phpMyAdmin URL')
+        ->set('form.database_type', 'mysql')
+        ->set('form.host', 'mysql.example.com')
+        ->set('form.port', 3306)
+        ->set('form.username', 'dbuser')
+        ->set('form.password', 'secret123')
+        ->set('form.phpmyadmin_enabled', true)
+        ->set('form.backups.0.database_names.0', 'myapp')
+        ->set('form.backups.0.volume_ids', [$volume->id])
+        ->set('form.backups.0.backup_schedule_id', dailySchedule()->id)
+        ->set('form.backups.0.retention_days', 14)
+        ->call('save')
+        ->assertHasErrors(['form.phpmyadmin_url']);
+});
+
 test('can create mongodb server with advanced connection options', function () {
     $user = User::factory()->withAbilities([Ability::ManageDatabaseServers->value])->create();
     $volume = Volume::factory()->local()->create(['name' => 'Test Volume']);

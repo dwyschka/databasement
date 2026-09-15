@@ -228,6 +228,12 @@ Databasement can launch [Adminer](https://www.adminer.org/) directly against a r
 
 Access is controlled by the `use-adminer` ability, held by **Admin** in the seeded defaults. A Super Admin can grant or revoke it on any role under **Configuration → Roles**. For roles that hold the ability, a *Browse* action appears on compatible servers in the Database Servers list and opens Adminer pre-authenticated with the server's stored credentials.
 
+### Opening in an External phpMyAdmin
+
+For **MySQL** and **MariaDB** servers, you can instead (or additionally) link out to an existing, externally hosted phpMyAdmin instance, for example one provided by your hosting panel. Enable **Open in phpMyAdmin** on the server form and enter the instance's base URL.
+
+Unlike Adminer, this also works for servers reachable only through an SSH tunnel, since phpMyAdmin runs independently of Databasement's own connectivity to the database. The *Open in phpMyAdmin* action opens the instance in a new tab with host, port and username pre-filled; the password is shown separately to paste in, since phpMyAdmin has not supported passing it via URL since 5.1 (it is treated as a login-CSRF vector).
+
 ## Troubleshooting Connection Issues
 
 ### Common Connection Issues

@@ -10,6 +10,7 @@ use App\Models\NotificationChannel;
 use App\Queries\DatabaseServerQuery;
 use App\Services\Backup\TriggerBackupAction;
 use App\Traits\OpensAdminerForServer;
+use App\Traits\OpensPhpMyAdminForServer;
 use App\Traits\RunsServerBackups;
 use App\Traits\Toast;
 use Illuminate\Contracts\View\View;
@@ -25,7 +26,7 @@ use Livewire\WithPagination;
 #[Title('Database Servers')]
 class Index extends Component
 {
-    use AuthorizesRequests, FiltersAndPaginates, OpensAdminerForServer, RunsServerBackups, Toast, WithPagination;
+    use AuthorizesRequests, FiltersAndPaginates, OpensAdminerForServer, OpensPhpMyAdminForServer, RunsServerBackups, Toast, WithPagination;
 
     #[Url]
     public string $search = '';
@@ -116,6 +117,11 @@ class Index extends Component
     public function openAdminer(string $id): void
     {
         $this->openAdminerForServer(DatabaseServer::findOrFail($id));
+    }
+
+    public function openPhpMyAdmin(string $id): void
+    {
+        $this->openPhpMyAdminForServer(DatabaseServer::findOrFail($id));
     }
 
     public function runBackup(string $backupId, TriggerBackupAction $action): void

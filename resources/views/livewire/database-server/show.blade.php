@@ -110,6 +110,12 @@
                         <x-button :label="__('Browse')" icon="o-table-cells" wire:click="openAdminer" spinner
                                   class="btn-outline btn-accent btn-sm" />
                     @endif
+                    @if($canAdminer && $server->supportsPhpMyAdmin())
+                        <x-button :label="__('Open in phpMyAdmin')" icon="o-arrow-top-right-on-square"
+                                  :link="$server->buildPhpMyAdminUrl()" external
+                                  wire:click="openPhpMyAdmin" spinner
+                                  class="btn-outline btn-accent btn-sm" />
+                    @endif
                     @can('backup', $server)
                         <x-button :label="__('Backup now')" icon="bi.database-fill-up" wire:click="runBackupAll" spinner
                                   class="btn-outline btn-info btn-sm" />
@@ -462,6 +468,9 @@
 
     {{-- ADMINER MODAL --}}
     <livewire:database-server.adminer-modal />
+
+    {{-- PHPMYADMIN MODAL --}}
+    <livewire:database-server.phpmyadmin-modal />
 
     {{-- REDIS RESTORE INFO MODAL --}}
     <x-modal wire:model="showRedisRestoreModal" :title="__('Restore Redis / Valkey Snapshot')" class="backdrop-blur">
