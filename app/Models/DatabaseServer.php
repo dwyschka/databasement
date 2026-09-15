@@ -178,6 +178,44 @@ class DatabaseServer extends Model
     }
 
     /**
+     * Check if this server can link out to an externally hosted phpMyAdmin
+     * instance. Only MySQL/MariaDB (phpMyAdmin doesn't speak other engines),
+     * and only when the user has opted in and supplied a base URL. Unlike
+     * {@see self::supportsAdminer()}, this is not restricted by SSH tunnel or
+     * agent: phpMyAdmin runs independently of Databasement's own connectivity
+     * to the database, so it can reach servers Databasement cannot.
+     */
+    public function supportsPhpMyAdmin(): bool
+    {
+        return in_array($this->database_type, [DatabaseType::MYSQL, DatabaseType::MARIADB], true)
+            && (bool) $this->getExtraConfig('phpmyadmin_enabled', false)
+            && ! empty($this->getExtraConfig('phpmyadmin_url'));
+    }
+
+    /**
+     * Build the URL to open this server in the configured external phpMyAdmin
+     * instance, with host/port/username pre-filled via query parameters.
+     * phpMyAdmin has not supported passing the password this way since 5.1
+     * (login-CSRF protection), so it is shown separately for the user to
+     * paste in.
+     */
+    public function buildPhpMyAdminUrl(): ?string
+    {
+        if (! $this->supportsPhpMyAdmin()) {
+            return null;
+        }
+
+        $baseUrl = (string) $this->getExtraConfig('phpmyadmin_url');
+        $query = http_build_query([
+            'server' => $this->host,
+            'port' => (string) $this->port,
+            'user' => $this->username,
+        ]);
+
+        return $baseUrl.(str_contains($baseUrl, '?') ? '&' : '?').$query;
+    }
+
+    /**
      * Check if this server requires an SSH tunnel for connections.
      * SQLite servers never need SSH tunnels since they use local file paths.
      */
@@ -376,6 +414,8 @@ class DatabaseServer extends Model
             ['dump_privileges',     fn ($v) => $type === DatabaseType::POSTGRESQL->value && $v,                    fn () => true],
             ['ssl_enabled',         fn ($v) => in_array($type, [DatabaseType::MYSQL->value, DatabaseType::MARIADB->value, DatabaseType::POSTGRESQL->value], true) && $v, fn () => true],
             ['connection_database', fn ($v) => $type === DatabaseType::POSTGRESQL->value && is_string($v) && trim($v) !== '', fn ($v) => trim($v)],
+            ['phpmyadmin_enabled',  fn ($v) => in_array($type, [DatabaseType::MYSQL->value, DatabaseType::MARIADB->value], true) && $v, fn () => true],
+            ['phpmyadmin_url',      fn ($v) => in_array($type, [DatabaseType::MYSQL->value, DatabaseType::MARIADB->value], true) && is_string($v) && trim($v) !== '', fn ($v) => trim($v)],
         ];
 
         foreach ($rules as [$key, $keep, $store]) {

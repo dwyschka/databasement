@@ -140,6 +140,12 @@
                                      wire:click="openAdminer('{{ $server->id }}')" spinner
                                      class="text-accent" />
                     @endif
+                    @if($canAdminer && $server->supportsPhpMyAdmin())
+                        <x-menu-item :title="__('Open in phpMyAdmin')" icon="o-arrow-top-right-on-square"
+                                     :link="$server->buildPhpMyAdminUrl()" external
+                                     wire:click="openPhpMyAdmin('{{ $server->id }}')" spinner
+                                     class="text-accent" />
+                    @endif
                     @can('backup', $server)
                         <x-menu-item :title="__('Backup now')" icon="bi.database-fill-up"
                                      wire:click="runBackupAll('{{ $server->id }}')" spinner
@@ -185,6 +191,9 @@
 
     <!-- ADMINER MODAL -->
     <livewire:database-server.adminer-modal />
+
+    <!-- PHPMYADMIN MODAL -->
+    <livewire:database-server.phpmyadmin-modal />
 
     <!-- REDIS RESTORE INFO MODAL -->
     <x-modal wire:model="showRedisRestoreModal" :title="__('Restore Redis / Valkey Snapshot')" class="backdrop-blur">

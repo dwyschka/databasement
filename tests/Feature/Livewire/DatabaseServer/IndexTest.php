@@ -151,3 +151,67 @@ test('openAdminer is forbidden for servers using SSH', function () {
         ->call('openAdminer', $server->id)
         ->assertForbidden();
 });
+
+// --- openPhpMyAdmin (use-adminer) ---
+
+test('use-adminer allows opening the phpMyAdmin modal', function () {
+    $user = User::factory()->withAbilities([Ability::UseAdminer->value])->create();
+    $server = DatabaseServer::factory()->withoutBackups()->create([
+        'database_type' => 'mysql',
+        'extra_config' => ['phpmyadmin_enabled' => true, 'phpmyadmin_url' => 'https://panel.example.com/phpmyadmin/'],
+    ]);
+
+    Livewire::actingAs($user)
+        ->test(Index::class)
+        ->call('openPhpMyAdmin', $server->id)
+        ->assertDispatched('open-phpmyadmin-modal');
+});
+
+test('without use-adminer, openPhpMyAdmin is forbidden', function () {
+    $user = User::factory()->withAbilities([])->create();
+    $server = DatabaseServer::factory()->withoutBackups()->create([
+        'database_type' => 'mysql',
+        'extra_config' => ['phpmyadmin_enabled' => true, 'phpmyadmin_url' => 'https://panel.example.com/phpmyadmin/'],
+    ]);
+
+    Livewire::actingAs($user)
+        ->test(Index::class)
+        ->call('openPhpMyAdmin', $server->id)
+        ->assertForbidden();
+});
+
+test('openPhpMyAdmin is forbidden for a server without phpMyAdmin configured', function () {
+    $user = User::factory()->withAbilities([Ability::UseAdminer->value])->create();
+    $server = DatabaseServer::factory()->withoutBackups()->create(['database_type' => 'mysql']);
+
+    Livewire::actingAs($user)
+        ->test(Index::class)
+        ->call('openPhpMyAdmin', $server->id)
+        ->assertForbidden();
+});
+
+test('openPhpMyAdmin is forbidden for unsupported database types', function () {
+    $user = User::factory()->withAbilities([Ability::UseAdminer->value])->create();
+    $server = DatabaseServer::factory()->withoutBackups()->create([
+        'database_type' => 'postgres',
+        'extra_config' => ['phpmyadmin_enabled' => true, 'phpmyadmin_url' => 'https://panel.example.com/phpmyadmin/'],
+    ]);
+
+    Livewire::actingAs($user)
+        ->test(Index::class)
+        ->call('openPhpMyAdmin', $server->id)
+        ->assertForbidden();
+});
+
+test('openPhpMyAdmin works for servers using SSH, unlike openAdminer', function () {
+    $user = User::factory()->withAbilities([Ability::UseAdminer->value])->create();
+    $server = DatabaseServer::factory()->withSshTunnel()->withoutBackups()->create([
+        'database_type' => 'mysql',
+        'extra_config' => ['phpmyadmin_enabled' => true, 'phpmyadmin_url' => 'https://panel.example.com/phpmyadmin/'],
+    ]);
+
+    Livewire::actingAs($user)
+        ->test(Index::class)
+        ->call('openPhpMyAdmin', $server->id)
+        ->assertDispatched('open-phpmyadmin-modal');
+});

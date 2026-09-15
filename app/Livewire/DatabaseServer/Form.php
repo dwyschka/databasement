@@ -71,6 +71,14 @@ class Form extends \Livewire\Form
     public bool $ssl_enabled = false;
 
     /**
+     * MySQL/MariaDB only. Opts into an "Open in phpMyAdmin" browse action that
+     * links out to an externally hosted phpMyAdmin instance.
+     */
+    public bool $phpmyadmin_enabled = false;
+
+    public string $phpmyadmin_url = '';
+
+    /**
      * PostgreSQL only. Database opened to test the connection and list the
      * others. Empty falls back to `postgres`, which managed providers often do
      * not grant CONNECT on. Stored in extra_config.
@@ -471,6 +479,8 @@ class Form extends \Livewire\Form
         $this->dump_privileges = (bool) $server->getExtraConfig('dump_privileges', false);
         $this->dump_config_open = ! empty($this->dump_flags) || $this->dump_format === 'custom' || $this->dump_privileges;
         $this->ssl_enabled = (bool) $server->getExtraConfig('ssl_enabled', false);
+        $this->phpmyadmin_enabled = (bool) $server->getExtraConfig('phpmyadmin_enabled', false);
+        $this->phpmyadmin_url = $server->getExtraConfig('phpmyadmin_url', '');
         $this->connection_database = $server->getExtraConfig('connection_database', '');
         $this->username = $server->username ?? '';
         $this->description = $server->description;

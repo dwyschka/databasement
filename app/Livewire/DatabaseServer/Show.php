@@ -10,6 +10,7 @@ use App\Models\NotificationChannel;
 use App\Models\Restore;
 use App\Services\Backup\TriggerBackupAction;
 use App\Traits\OpensAdminerForServer;
+use App\Traits\OpensPhpMyAdminForServer;
 use App\Traits\RunsServerBackups;
 use App\Traits\Toast;
 use Illuminate\Contracts\View\View;
@@ -22,7 +23,7 @@ use Livewire\Component;
 #[Title('Database Server')]
 class Show extends Component
 {
-    use AuthorizesRequests, OpensAdminerForServer, RunsServerBackups, Toast;
+    use AuthorizesRequests, OpensAdminerForServer, OpensPhpMyAdminForServer, RunsServerBackups, Toast;
 
     public DatabaseServer $server;
 
@@ -86,6 +87,11 @@ class Show extends Component
     public function openAdminer(): void
     {
         $this->openAdminerForServer($this->server);
+    }
+
+    public function openPhpMyAdmin(): void
+    {
+        $this->openPhpMyAdminForServer($this->server);
     }
 
     public function confirmDelete(): void
